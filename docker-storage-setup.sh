@@ -22,6 +22,41 @@
 
 set -e
 
+export GROWPART=/usr/bin/growpart
+export LSBLK=/usr/bin/lsblk
+export LVCHANGE=/usr/sbin/lvchange
+export LVCREATE=/usr/sbin/lvcreate
+export LVEXTEND=/usr/sbin/lvextend
+export LVM=/usr/sbin/lvm
+export LVREMOVE=/usr/sbin/lvremove
+export LVS=/usr/sbin/lvs
+export PVCREATE=/usr/sbin/pvcreate
+export PVRESIZE=/usr/sbin/pvresize
+export PVS=/usr/sbin/pvs
+export UDEVADM=/usr/sbin/udevadm
+export VGCREATE=/usr/sbin/vgcreate
+export VGEXTEND=/usr/sbin/vgextend
+export VGS=/usr/sbin/vgs
+export WIPEFS=/usr/sbin/wipefs
+if [ "${HOST}" != "" ]; then
+    export GROWPART=chroot ${HOST}${GROWPART}
+    export LSBLK=chroot ${HOST}${LSBLK}
+    export LVCHANGE=chroot ${HOST}${LVCHANGE}
+    export LVCREATE=chroot ${HOST}${LVCREATE}
+    export LVEXTEND=chroot ${HOST}${LVEXTEND}
+    export LVM=chroot ${HOST}${LVM}
+    export LVREMOVE=chroot ${HOST}${LVREMOVE}
+    export LVS=chroot ${HOST}${LVS}
+    export PVCREATE=chroot ${HOST}/${PVCREATE}
+    export PVRESIZE=chroot ${HOST}/${PVRESIZE}
+    export PVS=chroot ${HOST}${PVS}
+    export UDEVADM=chroot ${HOST}${UDEVADM}
+    export VGCREATE=chroot ${HOST}${VGCREATE}
+    export VGEXTEND=chroot ${HOST}${VGEXTEND}
+    export VGS=chroot ${HOST}${VGS}
+    export WIPEFS=chroot ${HOST}${WIPEFS}
+fi
+
 # This section reads the config file /etc/sysconfig/docker-storage-setup
 # Currently supported options:
 # DEVS: A quoted, space-separated list of devices to be used.  This currently
@@ -207,7 +242,7 @@ get_devicemapper_config_options() {
   local dm_fs="--storage-opt dm.fs=xfs"
 
   # docker expects device mapper device and not lvm device. Do the conversion.
-  eval $( lvs --nameprefixes --noheadings -o lv_name,kernel_major,kernel_minor $VG | while read line; do
+  eval $( ${LVS} --nameprefixes --noheadings -o lv_name,kernel_major,kernel_minor $VG | while read line; do
     eval $line
     if [ "$LVM2_LV_NAME" = "$DATA_LV_NAME" ]; then
       echo POOL_DEVICE_PATH=/dev/mapper/$( cat /sys/dev/block/${LVM2_LV_KERNEL_MAJOR}:${LVM2_LV_KERNEL_MINOR}/dm/name )
@@ -252,7 +287,7 @@ create_metadata_lv() {
   # TODO: Modify script to cleanup meta and data lvs if failure happened
   # later. Don't exit with error leaving partially created lvs behind.
 
-  if lvs -a $VG/${META_LV_NAME} --noheadings &>/dev/null; then
+  if ${LVS} -a $VG/${META_LV_NAME} --noheadings &>/dev/null; then
     Info "Metadata volume $META_LV_NAME already exists. Not creating a new one."
     return 0
   fi
@@ -260,10 +295,10 @@ create_metadata_lv() {
   # Reserve 0.1% of the free space in the VG for docker metadata.
   # Calculating the based on actual data size might be better, but is
   # more difficult do to the range of possible inputs.
-  VG_SIZE=$( vgs --noheadings --nosuffix --units s -o vg_size $VG )
+  VG_SIZE=$( ${VGS} --noheadings --nosuffix --units s -o vg_size $VG )
   META_SIZE=$(( $VG_SIZE / 1000 + 1 ))
   if [ ! -n "$META_LV_SIZE" ]; then
-    lvcreate -y -L ${META_SIZE}s -n $META_LV_NAME $VG
+    ${LVCREATE} -y -L ${META_SIZE}s -n $META_LV_NAME $VG
   fi
 }
 
@@ -319,14 +354,14 @@ data_size_in_bytes() {
   fi
 
   if [[ $DATA_SIZE == *%FREE ]];then
-    free_space=$(vgs --noheadings --nosuffix --units b -o vg_free $VG)
+    free_space=$(${VGS} --noheadings --nosuffix --units b -o vg_free $VG)
     percent=${DATA_SIZE%\%FREE}
     echo $((percent*free_space/100))
     return 0
   fi
 
   if [[ $DATA_SIZE == *%VG ]];then
-    vg_size=$(vgs --noheadings --nosuffix --units b -o vg_size $VG)
+    vg_size=$(${VGS} --noheadings --nosuffix --units b -o vg_size $VG)
     percent=${DATA_SIZE%\%VG}
     echo $((percent*vg_size/100))
   fi
@@ -351,7 +386,7 @@ check_min_data_size_condition() {
     Fatal "MIN_DATA_SIZE=$MIN_DATA_SIZE is too large to handle."
   fi
 
-  free_space=$(vgs --noheadings --nosuffix --units b -o vg_free $VG)
+  free_space=$(${VGS} --noheadings --nosuffix --units b -o vg_free $VG)
 
   if [ $free_space -lt $min_data_size_bytes ];then
     Fatal "There is not enough free space in volume group $VG to create data volume of size MIN_DATA_SIZE=${MIN_DATA_SIZE}."
@@ -432,8 +467,8 @@ check_docker_storage_metadata() {
 
 reset_lvm_thin_pool () {
   if lvm_pool_exists; then
-      lvchange -an $VG/${POOL_LV_NAME}
-      lvremove $VG/${POOL_LV_NAME}
+      ${LVCHANGE} -an $VG/${POOL_LV_NAME}
+      ${LVREMOVE} $VG/${POOL_LV_NAME}
   fi
 }
 
@@ -492,7 +527,7 @@ lvm_pool_exists() {
   local lv_data
   local lvname lv lvsize
 
-  lv_data=$( lvs --noheadings -o lv_name,lv_attr --separator , $VG | sed -e 's/^ *//')
+  lv_data=$(${LVS} --noheadings -o lv_name,lv_attr --separator , $VG | sed -e 's/^ *//')
   SAVEDIFS=$IFS
   for lv in $lv_data; do
   IFS=,
@@ -544,15 +579,15 @@ grow_root_pvs() {
   # also work.
   for pv in $ROOT_PVS; do
     # Split device & partition.  Ick.
-    growpart $( echo $pv | sed -r 's/([^0-9]*)([0-9]+)/\1 \2/' ) || true
-    pvresize $pv
+    ${GROWPART} $( echo $pv | sed -r 's/([^0-9]*)([0-9]+)/\1 \2/' ) || true
+    ${PVRESIZE} $pv
   done
 }
 
 grow_root_lv_fs() {
   if [ -n "$ROOT_SIZE" ]; then
     # TODO: Error checking if specified size is <= current size
-    lvextend -r -L $ROOT_SIZE $ROOT_DEV || true
+    ${LVEXTEND} -r -L $ROOT_SIZE $ROOT_DEV || true
   fi
 }
 
@@ -562,7 +597,7 @@ is_dev_part_of_vg() {
   local dev=$1
   local vg=$2
 
-  if ! pv_name=$(pvs --noheadings -o pv_name -S pv_name=$dev,vg_name=$vg); then
+  if ! pv_name=$(${PVS} --noheadings -o pv_name -S pv_name=$dev,vg_name=$vg); then
     Fatal "Error running command pvs. Exiting."
   fi
 
@@ -576,7 +611,7 @@ is_dev_part_of_vg() {
 vg_exists() {
   local check_vg=$1
 
-  for vg_name in $(vgs --noheadings -o vg_name); do
+  for vg_name in $(${VGS} --noheadings -o vg_name); do
     if [ "$vg_name" == "$VG" ]; then
       return 0
     fi
@@ -587,7 +622,7 @@ vg_exists() {
 is_block_dev_partition() {
   local bdev=$1
 
-  if ! disktype=$(lsblk -n --nodeps --output type ${bdev}); then
+  if ! disktype=$(${LSBLK} -n --nodeps --output type ${bdev}); then
     Fatal "Failed to run lsblk on device $bdev"
   fi
 
@@ -602,7 +637,7 @@ check_wipe_block_dev_sig() {
   local bdev=$1
   local sig
 
-  if ! sig=$(wipefs -p $bdev); then
+  if ! sig=$(${WIPEFS} -p $bdev); then
     Fatal "Failed to check signatures on device $bdev"
   fi
 
@@ -610,7 +645,7 @@ check_wipe_block_dev_sig() {
 
   if [ "$WIPE_SIGNATURES" == "true" ];then
     Info "Wipe Signatures is set to true. Any signatures on $bdev will be wiped."
-    if ! wipefs -a $bdev; then
+    if ! ${WIPEFS} -a $bdev; then
       Fatal "Failed to wipe signatures on device $bdev"
     fi
     return 0
@@ -697,7 +732,7 @@ EOF
 
   # Sometimes on slow storage it takes a while for partition device to
   # become available. Wait for device node to show up.
-  if ! udevadm settle;then
+  if ! ${UDEVADM} settle;then
     Fatal "udevadm settle after partition creation failed. Exiting."
   fi
 
@@ -716,22 +751,22 @@ create_disk_partitions() {
     # signatures on disk or signatures should be wiped. Don't care
     # about any signatures found in the middle of disk after creating
     # partition and wipe signatures if any are found.
-    if ! wipefs -a ${dev}1; then
+    if ! ${WIPEFS} -a ${dev}1; then
       Fatal "Failed to wipe signatures on device ${dev}1"
     fi
-    pvcreate ${dev}1
-    PVS="$PVS ${dev}1"
+    ${PVCREATE} ${dev}1
+    PVDEVS="$PVDEVS ${dev}1"
   done
 }
 
 create_extend_volume_group() {
   if [ -z "$VG_EXISTS" ]; then
-    vgcreate $VG $PVS
+    ${VGCREATE} $VG $PVDEVS
     VG_EXISTS=1
   else
     # TODO:
     #   * Error handling when PV is already part of a VG
-    vgextend $VG $PVS
+    ${VGEXTEND} $VG $PVDEVS
   fi
 }
 
@@ -745,7 +780,7 @@ enable_auto_pool_extension() {
   local profileDir
   local tmpFile=`mktemp -p /run -t tmp.XXXXX`
 
-  profileDir=$(lvm dumpconfig | grep "profile_dir" | cut -d "=" -f2 | sed 's/"//g')
+  profileDir=$(${LVM} dumpconfig | grep "profile_dir" | cut -d "=" -f2 | sed 's/"//g')
   [ -n "$profileDir" ] || return 1
 
   if [ ! -n "$POOL_AUTOEXTEND_THRESHOLD" ];then
@@ -766,7 +801,7 @@ activation {
 }
 EOF
   mv -Z $tmpFile ${profileDir}/${profileFile}
-  lvchange --metadataprofile ${profileName}  ${volume_group}/${pool_volume}
+  ${LVCHANGE} --metadataprofile ${profileName}  ${volume_group}/${pool_volume}
 }
 
 disable_auto_pool_extension() {
@@ -776,10 +811,10 @@ disable_auto_pool_extension() {
   local profileFile="${profileName}.profile"
   local profileDir
 
-  profileDir=$(lvm dumpconfig | grep "profile_dir" | cut -d "=" -f2 | sed 's/"//g')
+  profileDir=$(${LVM} dumpconfig | grep "profile_dir" | cut -d "=" -f2 | sed 's/"//g')
   [ -n "$profileDir" ] || return 1
 
-  lvchange --detachprofile ${volume_group}/${pool_volume}
+  ${LVCHANGE} --detachprofile ${volume_group}/${pool_volume}
   rm -f ${profileDir}/${profileFile}
 }
 
@@ -927,7 +962,7 @@ fi
 
 # Read mounts
 ROOT_DEV=$( awk '$2 ~ /^\/$/ && $1 !~ /rootfs/ { print $1 }' /proc/mounts )
-if ! ROOT_VG=$(lvs --noheadings -o vg_name $ROOT_DEV 2>/dev/null);then
+if ! ROOT_VG=$(${LVS} --noheadings -o vg_name $ROOT_DEV 2>/dev/null);then
   Info "Volume group backing root filesystem could not be determined"
   ROOT_VG=
 else
@@ -936,7 +971,7 @@ fi
 
 ROOT_PVS=
 if [ -n "$ROOT_VG" ];then
-  ROOT_PVS=$( pvs --noheadings -o pv_name,vg_name | awk "\$2 ~ /^$ROOT_VG\$/ { print \$1 }" )
+  ROOT_PVS=$( ${PVS} --noheadings -o pv_name,vg_name | awk "\$2 ~ /^$ROOT_VG\$/ { print \$1 }" )
 fi
 
 VG_EXISTS=
