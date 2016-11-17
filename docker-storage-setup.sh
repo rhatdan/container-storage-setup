@@ -54,12 +54,20 @@ set -e
 #
 # Note: lvm2 version should be same or higher than lvm2-2.02.112 for lvm
 #       thin pool functionality to work properly.
+
+# Check if the script is being run inside of a SPC container by examining $HOST
+# If set, PATH to use $HOST/usr/bin and $HOST/usr/sbin for host helper applications.
+if [[ ! -e $HOST ]]; then
+    export PATH=$HOST/usr/bin:$HOST/usr/sbin:$PATH
+fi
+
 POOL_LV_NAME="docker-pool"
 
-DOCKER_STORAGE="/etc/sysconfig/docker-storage"
+DOCKER_STORAGE="${HOST}/etc/sysconfig/docker-storage"
+DOCKER_STORAGE_SETUP="${HOST}/etc/sysconfig/docker-storage-setup"
 STORAGE_DRIVERS="devicemapper overlay overlay2"
 
-DOCKER_METADATA_DIR="/var/lib/docker"
+DOCKER_METADATA_DIR="${HOST}/var/lib/docker"
 
 PIPE1=/run/dss-fifo1
 PIPE2=/run/dss-fifo2
@@ -511,8 +519,9 @@ grow_root_pvs() {
   # Grow root pvs only if user asked for it through config file.
   [ "$GROWPART" != "true" ] && return
 
-  if [ ! -x "/usr/bin/growpart" ];then
-    Error "GROWPART=true is specified and /usr/bin/growpart executable is not available. Install /usr/bin/growpart and try again."
+  growpart_path=$(which growpart)
+  if [ ! -x "${growpart_path}" ];then
+    Error "GROWPART=true is specified and growpart executable is not available. Install growpart and try again."
     return 1
   fi
 
@@ -909,8 +918,8 @@ fi
 
 # If user has overridden any settings in /etc/sysconfig/docker-storage-setup
 # take that into account.
-if [ -e /etc/sysconfig/docker-storage-setup ]; then
-  source /etc/sysconfig/docker-storage-setup
+if [ -e ${DOCKER_STORAGE_SETUP} ]; then
+  source ${DOCKER_STORAGE_SETUP}
 fi
 
 # Read mounts
