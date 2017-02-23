@@ -8,7 +8,7 @@ test_set_extra_docker_opts() {
   local devs=$TEST_DEVS
   local test_status=1
   local testname=`basename "$0"`
-  local vg_name="dss-test-foo"
+  local vg_name="css-test-foo"
   local extra_options="--storage-opt dm.fs=ext4"
 
   # Error out if volume group $vg_name exists already
@@ -24,16 +24,16 @@ EXTRA_DOCKER_STORAGE_OPTIONS="$extra_options"
 EOF
   
   # Run container-storage-setup
-  $DSSBIN >> $LOGS 2>&1 
+  $CSSBIN >> $LOGS 2>&1 
 
-  # dss failed
+  # css failed
   if [ $? -ne 0 ]; then 
-    echo "ERROR: $testname: $DSSBIN --reset failed." >> $LOGS
+    echo "ERROR: $testname: $CSSBIN --reset failed." >> $LOGS
     cleanup $vg_name "$devs"
     return $test_status
   fi
 
-  # Check if docker-storage config file was created by dss
+  # Check if docker-storage config file was created by css
   if [ ! -f /etc/sysconfig/docker-storage ]; then
     echo "ERROR: $testname: /etc/sysconfig/docker-storage file was not created." >> $LOGS
     cleanup $vg_name "$devs"
