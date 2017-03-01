@@ -41,7 +41,7 @@ DOCKER_ROOT_VOLUME_SIZE=40%FREE
 
 STORAGE_IN_FILE="/etc/sysconfig/docker-storage-setup"
 STORAGE_OUT_FILE="/etc/sysconfig/docker-storage"
-STORAGE_DRIVERS="devicemapper overlay overlay2"
+STORAGE_DRIVER_LIST="devicemapper overlay overlay2"
 
 PIPE1=/run/css-$$-fifo1
 PIPE2=/run/css-$$-fifo2
@@ -850,7 +850,7 @@ get_docker_storage_options() {
 is_valid_storage_driver() {
   local driver=$1 d
 
-  for d in $STORAGE_DRIVERS;do
+  for d in $STORAGE_DRIVER_LIST;do
     [ "$driver" == "$d" ] && return 0
   done
 
